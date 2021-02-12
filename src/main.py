@@ -24,7 +24,7 @@ def sort_pts(points):
 
 
 # Reading image and downscaling.
-source = cv2.imread("deneme7.jpg")
+source = cv2.imread("deneme8.jpg")
 ratio = float(source.shape[1] / 270)
 img = cv2.resize(source, (270, 480), interpolation=cv2.INTER_AREA)
 
@@ -51,9 +51,6 @@ for i in range(len(contours)):
     areas.append(cv2.contourArea(contours[i]))
 max_index = np.argmax(areas)
 cnt = contours[max_index]
-"""x, y, w, h = cv2.boundingRect(cnt)
-bounding = cv2.rectangle(img.copy(), (x, y), (x+w, y+h), (0, 255, 0), 2)
-show(bounding, "bounding")"""
 
 # Detecting corners of the sheet.
 perimeter = cv2.arcLength(cnt, True)
@@ -79,6 +76,7 @@ show(warped, "warped")
 colorMasked = opticScan.editColor(warped).copy()
 show(colorMasked, "color")
 
+# Additional orientation fix.
 codeStrap = colorMasked[0:842, 0:45].copy()
 show(codeStrap, "cropped")
 
@@ -87,7 +85,7 @@ show(canny_codeStrap, "canny2")
 
 contours_codeStrap = cv2.findContours(canny_codeStrap, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[0]
 contoured_codeStrap = cv2.drawContours(codeStrap.copy(), contours_codeStrap, -1, (0, 255, 0), 1)
-show(contoured_codeStrap, "contour2")
+show(contoured_codeStrap, "contoured_codeStrap")
 
 pointsX = []
 pointsY = []
@@ -107,59 +105,61 @@ if angle >= 0:
 else:
     angle = 90 + angle
 pointsY, pointsX = zip(*sorted(zip(pointsY, pointsX)))
-image_center = (pointsX[32], pointsY[32])
+xCenter = sum(pointsX)/len(pointsX)
+yCenter = sum(pointsY)/len(pointsY)
+image_center = (xCenter, yCenter)
 rot_mat = cv2.getRotationMatrix2D(image_center, angle, 1)
-result = cv2.warpAffine(colorMasked.copy(), rot_mat, colorMasked.shape[1::-1], flags=cv2.INTER_CUBIC)
-show(result, "result")
+fixed = cv2.warpAffine(colorMasked.copy(), rot_mat, colorMasked.shape[1::-1], flags=cv2.INTER_CUBIC)
+show(fixed, "fixed")
 
 ######################################
 
-cropped2 = colorMasked[0:842, 0:45].copy()
+# Calculating grid spaces and starting coordinates based on code strap.
+codeStrap = colorMasked[0:842, 0:45].copy()
 
-canny3 = cv2.Canny(cropped2, 10, 50)
+canny_codeStrap = cv2.Canny(codeStrap, 10, 50)
 
-contours3 = cv2.findContours(canny3, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[0]
-contoured3 = cv2.drawContours(cropped2.copy(), contours3, -1, (0, 255, 0), 1)
+contours_codeStrap = cv2.findContours(canny_codeStrap, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[0]
+contoured_codeStrap = cv2.drawContours(codeStrap.copy(), contours_codeStrap, -1, (0, 255, 0), 1)
 
-noktalarX = []
-noktalarY = []
-lined = result.copy()
-for contour in contours3:
+scanned = fixed.copy()
+pointsX = []
+pointsY = []
+
+# Finding positions of rectangles in code strap.
+for contour in contours_codeStrap:
     moment = cv2.moments(contour)
     cX = (moment["m10"] / moment["m00"])
     cY = (moment["m01"] / moment["m00"])
-    noktalarX.append(cX)
-    noktalarY.append(cY)
-    cY = int(cY)
-    """cv2.line(lined,(0,cY),(595,cY),(0,255,0))"""
+    pointsX.append(cX)
+    pointsY.append(cY)
 
-xSpace = noktalarY[9] - noktalarY[10]
-print(xSpace)
+# Calculating average space between rectangles in code strap.
 ySum = 0
-for i in range(len(noktalarY) - 1):
-    ySum += (noktalarY[i] - noktalarY[i + 1])
-xSpace = float(ySum / (len(noktalarY) - 1))
+for i in range(len(pointsY) - 1):
+    ySum += (pointsY[i] - pointsY[i + 1])
 
+xSpace = float(ySum / (len(pointsY) - 1))
+
+# Calculating horizontal starting point and column count for the scan.
 xSum = 0
-for i in noktalarX:
+for i in pointsX:
     xSum += i
-xStart = xSum / len(noktalarX)
 
+xStart = xSum / len(pointsX)
 xNum = int((595 - xStart) / xSpace)
-print(f"space: {xSpace}")
-"""for i in range(xNum):
-    cv2.line(lined, (int(i*xSpace+xStart), 0), (int(i*xSpace+xStart), 842), (0, 255, 0))"""
 
+
+# Scanning the grid.
 grid = []
-for yIndex in range(len(noktalarY)):
+for yIndex in range(len(pointsY)):
     gridX = []
     for xIndex in range(1, xNum):
-        average = opticScan.checkSquare(result, int(xStart + (xIndex) * xSpace - xSpace / 2),
-                                        int(noktalarY[yIndex] - xSpace / 2), int(xSpace))
-        print(average)
+        average = opticScan.checkSquare(fixed, int(xStart + xIndex * xSpace - xSpace / 2),
+                                        int(pointsY[yIndex] - xSpace / 2), int(xSpace))
         if average > 75:
             color = (255, 0, 255)
-            cv2.drawMarker(lined, (int(xStart + (xIndex) * xSpace), int(noktalarY[yIndex])), color, cv2.MARKER_SQUARE,
+            cv2.drawMarker(scanned, (int(xStart + xIndex * xSpace), int(pointsY[yIndex])), color, cv2.MARKER_SQUARE,
                            thickness=1, markerSize=int(xSpace))
             gridX.append(1)
         else:
@@ -167,6 +167,6 @@ for yIndex in range(len(noktalarY)):
             gridX.append(0)
     grid.insert(0, gridX)
 
-show(lined, "SONN")
+show(scanned, "scanned")
 
 print(grid)
