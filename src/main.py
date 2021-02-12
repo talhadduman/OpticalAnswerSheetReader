@@ -97,7 +97,6 @@ for contour in contours_codeStrap:
     cY = (moment["m01"] / moment["m00"])
     pointsX.append(cX)
     pointsY.append(cY)
-"""print(len(contours2))"""
 xArr = np.array(pointsX)
 yArr = np.array(pointsY)
 m, b = np.polyfit(xArr, yArr, 1)
