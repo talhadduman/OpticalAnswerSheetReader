@@ -3,11 +3,13 @@ import numpy as np
 import math
 import opticScan
 
+debug = True
 
 def show(image, name):
-    cv2.imshow(name, image)
-    cv2.waitKey(-1)
-    cv2.destroyWindow(name)
+    if debug:
+        cv2.imshow(name, image)
+        cv2.waitKey(-1)
+        cv2.destroyWindow(name)
 
 
 def sort_pts(points):
@@ -62,7 +64,7 @@ sorted_pts = sort_pts(array)
 
 marked = img.copy()
 for point in sorted_pts:
-    cv2.drawMarker(marked, (point[0], point[1]), (255, 0, 255), cv2.MARKER_STAR)
+    cv2.drawMarker(marked, (int(point[0]), int(point[1])), (255, 0, 255), cv2.MARKER_STAR)
 show(marked, "marked")
 
 # Warping sheet to full size.
